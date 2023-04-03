@@ -1,90 +1,132 @@
-#include <dirent.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <ctype.h>
 
-void list_directory_contents(const char *dir_path, int recursive, const char *filter) {
-    // Open the directory
-    DIR *dir = opendir(dir_path);
-    if (dir == NULL) {
-        perror("opendir");
+
+
+void listDir(const char* dirpath, int is_recursive, off_t value, int size_filter, int name_filter, char* str){
+     
+     DIR* dir = opendir(dirpath);
+     if(dir==NULL){
+        perror("Error opening directory");
         return;
-    }
-    // Read the directory contents
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        // Skip entries for "." and ".."
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-            continue;
-        }
-        // Build the full path to the entry
-        char path[1024];
-        snprintf(path, sizeof(path), "%s/%s", dir_path, entry->d_name);
-        // Apply filtering options
-        struct stat st;
-        if (stat(path, &st) == -1) {
-            perror("stat");
-            continue;
-        }
-        if (filter != NULL) {
-            if (strcmp(filter, "d") == 0 && !S_ISDIR(st.st_mode)) {
-                continue;
-            }
-            if (strcmp(filter, "f") == 0 && !S_ISREG(st.st_mode)) {
-                continue;
-            }
-        }
-        // Print the entry name
-        printf("%s\n", path);
-        // Recursively list sub-directories
-        if (recursive && S_ISDIR(st.st_mode)) {
-            list_directory_contents(path, 1, filter);
-        }
-    }
-    // Close the directory
-    closedir(dir);
-}
-
-
-int main(int argc, char *argv[]) {
-    char *dir_path = NULL;
-    int recursive = 0;
-    char *filter = NULL;
-    
-    if (strcmp(argv[1], "variant") == 0) {
-          printf("%d\n", 12345);
-    }else{
-    
-             // Parse command line arguments
-             for (int i = 1; i < argc; i++) {
-               if (strcmp(argv[i], "list") == 0) {
-                  // "list" option specified
-                  i++;
-                  if (i < argc && strcmp(argv[i], "recursive") == 0) {
-                  // "recursive" option specified
-                  recursive = 1;
-                  i++;
-                  }
-                  if (i < argc && strncmp(argv[i], "path=", 5) == 0) {
-                  // "path" option specified
-                  dir_path = argv[i] + 5;
-                  }
-                  if (i < argc && strncmp(argv[i], "filter=", 7) == 0) {
-                  // "filter" option specified
-                  filter = argv[i] + 7;
-                 }
+        
+     }
+     char filepath[1024];
+     struct stat statbuf;
+     struct dirent* entry; 
+     while((entry = readdir(dir))!= NULL){
+     
+        if(is_recursive==0){
+           snprintf(filepath, 1024, "%s/%s", dirpath, entry->d_name);
+           if(lstat(filepath, &statbuf)==0){
+              if(size_filter==1){
+                 if(S_ISDIR(statbuf.st_mode)==0){
+                    if(statbuf.st_size < value){
+                       printf("%s\n", filepath);
+                    }
+                 } 
+              }else if(name_filter==1){
+                  int n = strlen(str);
+                  
+               
+              }else{
+                  printf("%s\n", filepath);
               }
+           } 
+        
+        }else{
+          if(strcmp(entry->d_name, "..")!=0 && strcmp(entry->d_name, ".")!=0){
+             snprintf(filepath, 1024, "%s/%s", dirpath, entry->d_name);
+             if(lstat(filepath, &statbuf)==0){
+                if(size_filter==1){
+                    //printf("%s\n", filepath);
+                    if(S_ISDIR(statbuf.st_mode)){
+                           listDir(filepath, is_recursive, value, size_filter);
+                         //  if(S_ISREG(statbuf.st_mode)){
+                           //     if(statbuf.st_size < size_filter){
+                             //      printf("%s\n", filepath);
+                               // }
+                           }else if(statbuf.st_size < value){
+                               printf("%s\n", filepath);
+                           }
+                     
+                }else{
+                      printf("%s\n", filepath);
+                      if(S_ISDIR(statbuf.st_mode)){
+                         listDir(filepath, is_recursive, value, size_filter);
+                      }
+                
+                }
+             }
           }
-        // Check that dir_path is not NULL
-        if (dir_path == NULL) {
-        printf("ERROR: Path not specified.\n");
-           return 1;
-        }
-       // List the directory contents
-       list_directory_contents(dir_path, recursive, filter);
-       printf("SUCCESS\n");
-       
+       }
     }
-    return 0;
+    closedir(dir);
+ }
+
+
+int main(int argc, char* argv[]){
+
+    char* dir_path=NULL;
+    int recursive=0;
+    int i;
+    off_t value;
+    int size_filter=0;
+    int name_filter=0;
+    char str[50]={ 0 };
+    
+    //if(strcmp(argv[1], "variant")==0){
+      // printf("12345\n");
+   // }else{
+  
+       printf("argc: %d\n", argc);
+       for(i=1; i<argc; i++){
+          if(strcmp(argv[i], "variant")==0){
+             printf("12345\n");
+          }
+          if(strcmp(argv[i], "list")==0){
+             i++;
+             printf("i at list: %d\n", i);
+             if(i<argc && strcmp(argv[i], "recursive")==0){
+                recursive=1;
+                i++;
+                printf("i at recursive: %d\n", i);
+              }
+              if(i<argc && strncmp(argv[i], "size_smaller=", 13)==0){
+                 size_filter=1;
+                 value=atoll((argv[i]+13));
+                 i++;
+                 printf("i at size_smaller: %d\n", i);
+              }
+              if(i<argc && strncmp(argv[i], "name_ends_with=", 15)==0){
+                 name_filter=1;
+                 str=argv[i]+15;
+                 i++;
+                 printf("i at name_ends_with: %d\n", i);
+              }
+              if(i<argc && strncmp(argv[i], "path=", 5)==0){
+                 dir_path=argv[i]+5;
+                 printf("i at path= %d\n", i);
+             }
+          }
+       }
+       if(strcmp(argv[1], "variant")!=0){
+           if(dir_path==NULL){
+           printf("ERROR: invalid directory path\n");
+           return -1;
+           }
+           printf("dir_path: %s\nrecursive: %d\nsize_filter: %ld\nis_filter: %d\n", dir_path, recursive, size_filter, is_filter);
+           listDir(dir_path, recursive, size_filter, is_filter);
+           printf("SUCCESS\n");
+       }
+   
+   return 0;
+
+    
 }
