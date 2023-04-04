@@ -40,7 +40,9 @@ void listDir(const char* dirpath, int is_recursive, off_t value, int size_filter
                  } 
               
               }else{
-                  printf("%s\n", filepath);
+                  if(strcmp(entry->d_name, "..")!=0 && strcmp(entry->d_name, ".")!=0){
+                      printf("%s\n", filepath);  
+                  }
               }
            } 
         
@@ -116,11 +118,21 @@ int main(int argc, char* argv[]){
                  i++;
                //  printf("i at size_smaller: %d\n", i);
                }
+               if(i<argc && strcmp(argv[i], "recursive")==0){
+                  recursive=1;
+                  i++;
+             //     printf("i at recursive: %d\n", i);
+               }
                if(i<argc && strncmp(argv[i], "name_ends_with=", 15)==0){
                  name_filter=1;
                  str=argv[i]+15;
                  i++;
                  //printf("i at name_ends_with: %d\n", i);
+               }
+               if(i<argc && strcmp(argv[i], "recursive")==0){
+                  recursive=1;
+                  i++;
+             //     printf("i at recursive: %d\n", i);
                }
                if(i<argc && strncmp(argv[i], "path=", 5)==0){
                  dir_path=argv[i]+5;
