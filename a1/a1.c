@@ -15,6 +15,143 @@ struct section_hd{
 }secton_hd;
 
 
+// aceasta functie gaseste SF files cu at least doua sectiuni cu valoare 54, il folosesc in findall function
+int is_SF_file(const char* filepath){
+    
+    int ver_magic=0;
+    int ver_version = 0;
+    int ver_nr_of_sections = 0 ; 
+    
+    int fd=-1;
+    
+    fd = open(filepath, O_RDONLY);
+    if(fd == -1){
+       perror("Couldn't open the file\n");
+       return -1;
+    }
+    
+    // citesc magic si il verific
+    char magic;
+    if(read(fd, &magic, 1)==-1){
+       perror("Error while reading magic\n");
+       close(fd);
+       return -1;
+    }
+    if(magic=='o'){
+       ver_magic=1;
+    }else{
+       printf("ERROR\ninvalid file\n");
+       close(fd);
+       return -1;
+    }
+    
+    
+    lseek(fd, 2, SEEK_CUR);  // sarim peste header_size cu 2 bytes
+    // citesc version si il verific
+    unsigned char version;
+    if(read(fd, &version, 1)==-1){
+       perror("Error while reading version\n");
+       close(fd);
+       return -1;
+    } 
+    int version_value=(int)version;
+    if(version_value>=103 && version_value<=133){
+       ver_version=1;
+    }else{
+       printf("ERROR\ninvalid file\n");
+       close(fd);
+       return -1;
+
+    }
+    
+    
+    // citesc no_of_versions si il verific
+    unsigned char no_of_sections;
+    if(read(fd, &no_of_sections, 1)==-1){
+       perror("Error while reading nr_of_sections\n");
+       close(fd);
+       return -1;
+    } 
+    int nr_sections=(int)no_of_sections;
+    if(nr_sections>=7 && nr_sections<=19){
+       ver_nr_of_sections=1;
+    }else{
+       printf("ERROR\ninvalid file\n");
+       close(fd);
+       return -1;
+    }
+    
+    // citesc sect_type-urile si le verific daca corespunde, in acelasi timp tin cont de sect_type-ul care au valoare 54 daca da increment variabila "in sect_type_54"  
+    int ver_sect_type = 0;
+    int sect_type_54=0;
+    unsigned int sect_type;
+    for(int i=0; i<nr_sections; i++){
+       lseek(fd, 17, SEEK_CUR);
+       if(read(fd, &sect_type, 4)==-1){
+          printf("Couldnt read the sect_type\n");
+          close(fd);
+          return -1;
+       }
+       if(sect_type==49 || sect_type==60 || sect_type==38 || sect_type==87 || sect_type==54 || sect_type==55){
+         ver_sect_type++;
+         if(sect_type==54){
+           sect_type_54++;
+         }
+       }else{
+          printf("ERROR\ninvalid file\n");
+          close(fd);
+          return -1;
+       }
+       lseek(fd, 8, SEEK_CUR);
+       
+    }
+    
+    // verific daca fisierul e SF file si daca da, verific daca sect_type_54 e mai mare sau egal cu 2 (show SF file that has at least 2 section types with the value 54) daca da returnez 1
+    if(ver_magic==1 && ver_version==1 && ver_nr_of_sections==1 && ver_sect_type==nr_sections){
+        if(sect_type_54>=2){
+          close(fd);
+          return 1;
+        }
+        
+    }
+    
+    close(fd);
+    return 0;
+}
+
+
+
+// in findall folosesc is_SF_file function si afisez fisiere care corespunde
+void findall(const char* dirpath){
+    
+         
+     DIR* dir = opendir(dirpath);
+     if(dir==NULL){
+        perror("Error opening directory");
+        return;
+        
+     }
+     char filepath[1024];
+     struct stat statbuf;
+     struct dirent* entry; 
+     while((entry = readdir(dir))!= NULL){
+        if(strcmp(entry->d_name, "..")!=0 && strcmp(entry->d_name, ".")!=0){
+             snprintf(filepath, 1024, "%s/%s", dirpath, entry->d_name);
+             if(lstat(filepath, &statbuf)==0){
+                 if(S_ISDIR(statbuf.st_mode)){
+                    findall(filepath);
+                 }else{
+                   if(is_SF_file(filepath)==1){
+                      printf("%s\n", filepath);
+                   }
+                 }
+     
+             }
+     
+         }
+      }
+}
+
 
 void free_matrix(char** matrix, unsigned int rows)
 {
@@ -502,7 +639,7 @@ int main(int argc, char* argv[]){
             return -1;
          }
           printf("SUCCESS\n");
-          //findall(dir_path);
+          findall(dir_path);
        }
        if(strcmp(argv[1], "list")==0){
            if(dir_path==NULL){
