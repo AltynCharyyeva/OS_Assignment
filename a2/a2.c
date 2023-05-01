@@ -7,97 +7,96 @@
 #include <semaphore.h>
 
 
+#define NR_THREADS_P2 6
+#define NR_THREADS_P7 46
+#define NR_THREADS_P8 4
+
+
+
 typedef struct {
    int thread_id;
    sem_t* logSem;
-}th_struct_p8;
+}th_struct;
 
-typedef struct {
-   int thread_id;
-   sem_t* mutex;
-   sem_t* barrier1;
-   sem_t* barrier2;
-   pthread_mutex_t* lock;
-}th_struct_p7;
+typedef struct{
+  int thread_id;
+}th_struct_p2;
 
-int count=0;
-int nrThreads=0;
-
+sem_t shared_sem1;
+sem_t shared_sem2;
 
 
 void* thread_fn_for_p8(void* arg){
 
-   th_struct_p8* s = (th_struct_p8*)arg;
+   th_struct* s = (th_struct*)arg;
    if(s->thread_id == 4){
        sem_wait(s->logSem);
        info(BEGIN, 8, 4);
-       //cnt++;
        info(END, 8, 4);
-       //sem_post(s->logSem);
    }
    else if(s->thread_id==1){
-      //cnt++;
       info(BEGIN, 8, 1);
       sem_post(s->logSem);
-     // sem_wait(s->logSem);
-      //info(END, 8, 1);
    }else if(s->thread_id==2){
+      sem_wait(&shared_sem1);
       info(BEGIN, 8, 2);
-      //cnt++;
       info(END, 8, 2);
+      sem_post(&shared_sem2);
    }else if(s->thread_id==3){
       info(BEGIN, 8, 3);
-      //cnt++;
       info(END, 8, 3);
    }
+   
     
    return NULL;
 }
 
 
 void* thread_fn_for_p7(void* arg){
-   
-   th_struct_p7* s = (th_struct_p7*)arg;
-      //part1
-      sem_wait(s->mutex);
-      count = count+1;
-      
-      info(BEGIN, 7, s->thread_id);
-      if(count == 6){
-         sem_wait(s->barrier2);
-         sem_post(s->barrier1);
-      }
-      sem_post(s->mutex);
-      sem_wait(s->barrier1);
-      sem_post(s->barrier2);
-      
-      //part2
-      sem_wait(s->mutex);
-      count = count -1;     
-      
-      info(END, 7, s->thread_id);
-      if(count == 0){
-         sem_wait(s->barrier1);
-         sem_post(s->barrier2);
-      }
-      sem_post(s->mutex);
-      sem_wait(s->barrier2);
-      sem_post(s->barrier2);
-   return NULL;
-}
-
-void* thrd_fun(void* arg){
     
-    th_struct_p7* s = (th_struct_p7*)arg; 
+    th_struct* s = (th_struct*)arg; 
     
-    sem_wait(s->mutex);
+    sem_wait(s->logSem);
     info(BEGIN, 7, s->thread_id);
     info(END, 7, s->thread_id);
-    sem_post(s->mutex);
+    sem_post(s->logSem);
     
     return NULL;
     
 }
+
+
+void* thread_fn_for_p2(void* arg){
+    
+    th_struct_p2* stru = (th_struct_p2*)arg;
+
+    
+    
+    if(stru->thread_id==1){
+       info(BEGIN, 2, 1);
+       info(END, 2, 1);
+       sem_post(&shared_sem1);
+    }else if(stru->thread_id==3){
+       sem_wait(&shared_sem2);
+       info(BEGIN, 2, 3);
+       info(END, 2, 3);
+    }else if(stru->thread_id==2){
+      info(BEGIN, 2, 2);
+      info(END, 2, 2);
+    }else if(stru->thread_id==4){
+       info(BEGIN, 2, 4);
+       info(END, 2, 4);
+    }else if(stru->thread_id==5){
+       info(BEGIN, 2, 5);
+       info(END, 2, 5);
+    }else if(stru->thread_id==6){
+       info(BEGIN, 2, 6);
+       info(END, 2, 6);
+    }
+    return NULL;
+
+}
+
 
 
 
@@ -115,7 +114,34 @@ int main(){
     }
     if(P2==0){
         info(BEGIN, 2, 0);
-        //printf("Parent: %d\n", getppid());
+        pthread_t thrd_arr_p2[NR_THREADS_P2];
+        th_struct_p2 params_p2[NR_THREADS_P2];
+        if(sem_init(&shared_sem1, 1, 1)){
+           perror("Couldnt create the semaphore shared_sem1\n");
+           return -1;
+        }
+        if(sem_init(&shared_sem2, 1, 1)){
+           perror("Couldnt create the semaphore shared_sem2\n");
+           return -1;
+        }        
+        for(int i=0; i<NR_THREADS_P2; i++){
+            params_p2[i].thread_id = i+1;
+            if(pthread_create(&thrd_arr_p2[i], NULL, thread_fn_for_p2, &params_p2[i])){
+               perror("Couldnt create the threads\n");
+               return -1;
+            }
+        }
+        
+        for(int i=0; i<NR_THREADS_P2; i++){
+           if(pthread_join(thrd_arr_p2[i], NULL)){
+              perror("Couldnt join the threads\n");
+              return -1;
+           }
+        }
+        
+        sem_destroy(&shared_sem1);
+        sem_destroy(&shared_sem2);
+        
         P3=fork();
         if(P3==-1){
            perror("Couldnt create P2\n");
@@ -153,47 +179,28 @@ int main(){
              return -1;
            }else if(P7==0){
              info(BEGIN, 7, 0);
-             pthread_t thr_arr_p7[46];
-             th_struct_p7 prms[46];
-             sem_t mutex;
-             sem_t barrier1;
-             sem_t barrier2;
-             pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-             if(sem_init(&mutex, 0, 6)){
+             pthread_t thr_arr_p7[NR_THREADS_P7];
+             th_struct params_p7[NR_THREADS_P7];
+             sem_t sem;
+             if(sem_init(&sem, 0, 6)){
                 perror("Couldnt initialize the semaphore mutex\n");
                 return -1;
              }
-             if(sem_init(&barrier1, 0, 0)){
-                perror("Couldnt initialize the semaphore barrier1\n");
-                return -1;
-             }
-             if(sem_init(&barrier2, 0, 1)){
-                perror("Couldnt initialize the semaphore barrier2\n");
-                return -1;
-             }
-             for(int i=0; i<46; i++){
-                prms[i].thread_id = i+1;
-                prms[i].mutex = &mutex;
-                //prms[i].barrier1 = &barrier1;
-                //prms[i].barrier2 = &barrier2;
-                //prms[i].lock = &lock;
-                if(pthread_create(&thr_arr_p7[i], NULL, thrd_fun, &prms[i])){
+             for(int i=0; i<NR_THREADS_P7; i++){
+                params_p7[i].thread_id = i+1;
+                params_p7[i].logSem = &sem;
+                if(pthread_create(&thr_arr_p7[i], NULL, thread_fn_for_p7, &params_p7[i])){
                    perror("Couldnt create thread\n");
                    return -1;
                 }
-                //info(BEGIN, 7, i+1);
              }
-             for(int i=0; i<46; i++){
+             for(int i=0; i<NR_THREADS_P7; i++){
                 if(pthread_join(thr_arr_p7[i], NULL)){
                    perror("Couldnt join the thread\n");
                    return -1;
                 }
-                //info(END, 7, i+1);
              }
-             sem_destroy(&mutex);
-             sem_destroy(&barrier1);
-             sem_destroy(&barrier2);
-             pthread_mutex_destroy(&lock);
+             sem_destroy(&sem);
              info(END, 7, 0);
            } else{
              waitpid(P7, 0, 0);
@@ -203,8 +210,8 @@ int main(){
                return -1;
              } else if(P8==0){
                 info(BEGIN, 8, 0);
-                pthread_t thr_arr_p8[4];
-                th_struct_p8 params[4];
+                pthread_t thr_arr_p8[NR_THREADS_P8];
+                th_struct params_p8[NR_THREADS_P8];
                 sem_t logSem;
                
                 if(sem_init(&logSem, 0, 0)){
@@ -212,23 +219,21 @@ int main(){
                     return -1;
                 }
                 
-                for(int i=0; i<4; i++){
-                  params[i].thread_id=i+1;
-                  params[i].logSem=&logSem;
-                   if(pthread_create(&thr_arr_p8[i], NULL, thread_fn_for_p8, &params[i])){
+                for(int i=0; i<NR_THREADS_P8; i++){
+                  params_p8[i].thread_id=i+1;
+                  params_p8[i].logSem=&logSem;
+                   if(pthread_create(&thr_arr_p8[i], NULL, thread_fn_for_p8, &params_p8[i])){
                       perror("Couldnt create thread\n");
                       return -1;
                    }
-                  // info(BEGIN, 8, i+1);
                 }
                 
                 
-                for(int i=0; i<4; i++){
+                for(int i=0; i<NR_THREADS_P8; i++){
                    if(pthread_join(thr_arr_p8[i], NULL)){
                       perror("Couldnt join the thread\n");
                       return -1;
                    }
-                   //info(END, 8, i+1);
                 }
                 info(END, 8, 1);
                 
