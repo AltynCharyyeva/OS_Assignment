@@ -22,9 +22,13 @@ typedef struct{
   int thread_id;
 }th_struct_p2;
 
-sem_t shared_sem1;
-sem_t shared_sem2;
-
+pthread_mutex_t lock1;
+pthread_mutex_t lock2;
+pthread_mutex_t lock3;
+pthread_cond_t cond1;
+pthread_cond_t cond2;
+pthread_cond_t cond3;
+int global = 0;
 
 void* thread_fn_for_p8(void* arg){
 
@@ -38,15 +42,21 @@ void* thread_fn_for_p8(void* arg){
       info(BEGIN, 8, 1);
       sem_post(s->logSem);
    }else if(s->thread_id==2){
-      sem_wait(&shared_sem1);
+      pthread_mutex_lock(&lock2);
+      while(global==0){
+          pthread_cond_wait(&cond1, &lock2);
+      }
+      global=2;
+      printf("Global at P8 T2: %d\n", global);
       info(BEGIN, 8, 2);
       info(END, 8, 2);
-      sem_post(&shared_sem2);
+      pthread_cond_signal(&cond2);
+      pthread_mutex_unlock(&lock2);
+      //pthread_exit((void*) 0);
    }else if(s->thread_id==3){
       info(BEGIN, 8, 3);
       info(END, 8, 3);
    }
-   
     
    return NULL;
 }
@@ -74,12 +84,22 @@ void* thread_fn_for_p2(void* arg){
     
     if(stru->thread_id==1){
        info(BEGIN, 2, 1);
+       pthread_mutex_lock(&lock1);
+       global=1;
+       printf("Global at P2, T1: %d\n", global);
        info(END, 2, 1);
-       sem_post(&shared_sem1);
+       pthread_cond_signal(&cond1);
+       pthread_mutex_unlock(&lock1);
     }else if(stru->thread_id==3){
-       sem_wait(&shared_sem2);
+       pthread_mutex_lock(&lock3);
+       while(global==1){
+          pthread_cond_wait(&cond2, &lock3);
+       }
+       global=3;
+       printf("Global at P2 T3: %d\n", global);
        info(BEGIN, 2, 3);
        info(END, 2, 3);
+       pthread_mutex_unlock(&lock3);
     }else if(stru->thread_id==2){
       info(BEGIN, 2, 2);
       info(END, 2, 2);
@@ -92,7 +112,7 @@ void* thread_fn_for_p2(void* arg){
     }else if(stru->thread_id==6){
        info(BEGIN, 2, 6);
        info(END, 2, 6);
-    }
+    }   
     return NULL;
 
 }
@@ -116,14 +136,12 @@ int main(){
         info(BEGIN, 2, 0);
         pthread_t thrd_arr_p2[NR_THREADS_P2];
         th_struct_p2 params_p2[NR_THREADS_P2];
-        if(sem_init(&shared_sem1, 1, 1)){
-           perror("Couldnt create the semaphore shared_sem1\n");
-           return -1;
-        }
-        if(sem_init(&shared_sem2, 1, 1)){
-           perror("Couldnt create the semaphore shared_sem2\n");
-           return -1;
-        }        
+        pthread_mutex_init(&lock1, NULL);
+        pthread_mutex_init(&lock2, NULL);
+        pthread_mutex_init(&lock3, NULL);
+        pthread_cond_init(&cond1, NULL);
+        pthread_cond_init(&cond2, NULL);
+        pthread_cond_init(&cond3, NULL);       
         for(int i=0; i<NR_THREADS_P2; i++){
             params_p2[i].thread_id = i+1;
             if(pthread_create(&thrd_arr_p2[i], NULL, thread_fn_for_p2, &params_p2[i])){
@@ -138,9 +156,6 @@ int main(){
               return -1;
            }
         }
-        
-        sem_destroy(&shared_sem1);
-        sem_destroy(&shared_sem2);
         
         P3=fork();
         if(P3==-1){
